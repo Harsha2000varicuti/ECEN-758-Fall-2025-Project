@@ -2,10 +2,10 @@ import os
 import re
 import numpy as np
 import pandas as pd
-
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.pipeline import Pipeline
 from sklearn.calibration import CalibratedClassifierCV
@@ -66,41 +66,52 @@ def main():
         random_state=42,
     )
 
-    # TF-IDF + Linear SVM pipeline
-    base_clf = LinearSVC(C=1.0)
+    # TF-IDF + Linear SVM pipeline and TF-IDF + Multinomial Naive Bayes pipeline
+    base_clf = {
+        "LinearSVC": LinearSVC(C=1.0),
+        "NaiveBayes" : MultinomialNB()
+    }
+
 
     # for calibrated probabilities:
     # base_clf = CalibratedClassifierCV(LinearSVC(C=1.0), method="isotonic", cv=3)
+    for model_name, classifier in base_clf.items():
+        print("\n" + "=" * 40)
+        print(f"Training and evaluating: {model_name}")
+        print("=" * 40 + "\n")
 
-    pipe = Pipeline([
-        ("tfidf", TfidfVectorizer(
-            analyzer="char",
-            ngram_range=(1, 2),   # TODO: try (1,3), (2,3), (1,4)
-            min_df=3,
-            max_df=0.9,
-            sublinear_tf=True,
-            lowercase=False,
-            dtype=np.float32,
-        )),
-        ("clf", base_clf),
-    ])
+        pipe = Pipeline([
+            ("tfidf", TfidfVectorizer(
+                analyzer="char",
+                ngram_range=(1, 2),   # TODO: try (1,3), (2,3), (1,4)
+                min_df=3,
+                max_df=0.9,
+                sublinear_tf=True,
+                lowercase=False,
+                dtype=np.float32,
+            )),
+            ("clf", classifier),
+        ])
 
-    # fit TF-IDF + LinearSVC on train split
-    pipe.fit(X_train, y_train)
+        # fit TF-IDF + LinearSVC and TF-IDF + MultinomialNB on train split
+        pipe.fit(X_train, y_train)
 
-    # validation metrics
-    y_val_pred = pipe.predict(X_val)
-    print(classification_report(y_val, y_val_pred))
-    print(confusion_matrix(y_val, y_val_pred))
+        # validation metrics
+        print("\n--- Validation Metrics ---")
+        y_val_pred = pipe.predict(X_val)
+        print(classification_report(y_val, y_val_pred))
+        print(confusion_matrix(y_val, y_val_pred))
 
-    # test metrics
-    y_test_pred = pipe.predict(test_texts)
-    print(classification_report(y_test, y_test_pred))
-    print(confusion_matrix(y_test, y_test_pred))
+        # test metrics
+        print("\n--- Test Metrics ---")
+        y_test_pred = pipe.predict(test_texts)
+        print(classification_report(y_test, y_test_pred))
+        print(confusion_matrix(y_test, y_test_pred))
 
-    # save model
-    model_path = os.path.join(MODEL_DIR, "tfidf_char12_linearsvc.joblib")
-    dump(pipe, model_path)
+        # save model
+        model_filename = f"tfidf_char12_{model_name.lower()}.joblib"
+        model_path = os.path.join(MODEL_DIR, model_filename)
+        dump(pipe, model_path)
 
 
 if __name__ == "__main__":
